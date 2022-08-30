@@ -9,8 +9,9 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
     volumes:
-      - ./psql-files:/var/lib/postgresql/data
-      - ./db_init.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./psql-app/psql-files:/var/lib/postgresql/data
+      - ./psql-app/db_init.sql:/docker-entrypoint-initdb.d/create_tables.sql
     container_name: velib_db
     ports:
       - "5432:5432"
+
