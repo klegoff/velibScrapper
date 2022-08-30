@@ -1,6 +1,8 @@
 import requests
 import sched
 import time
+import datetime
+import logging
 import numpy as np
 import pandas as pd
 import psycopg2
@@ -82,19 +84,26 @@ def insertStationData(station_data, cursor):
         try:
             cursor.execute("""INSERT INTO station (stationcode, name, nom_arrondissement_communes, capacity, coordonnee_x, coordonnee_y) VALUES (%s, %s, %s, %s, %s, %s);""",row)
         except Exception as e:
-            print(e)
+            #print(e)
+            pass
 
 def insertHistoricalData(historical_data, cursor):
     """
     insert data in the database
     data = station_data (type = dataframe)
     """
+    new_line_count = 0
+
     for _idx, row in historical_data.iterrows():
         row = tuple(row)
         try:
             cursor.execute("""INSERT INTO historic   (record_id,  stationcode, ebike, mechanical, numbikesavailable, numdocksavailable, is_renting, is_installed, is_returning, duedate) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",row)
+            new_line_count += 1
+
         except Exception as e:
-            print(e)
+            #print(e)
+            pass
+    print("Number of inserted rows : " + str(new_line_count))
 
 def fillDB(cursor, save_station = False):
     """
@@ -102,6 +111,7 @@ def fillDB(cursor, save_station = False):
     read from api, process, save in db
     save_station = True, if we want to save station data
     """
+    print("Data extract, at time =",datetime.datetime.now())
     station_data, historical_data = format(getData())
 
     if save_station:
@@ -140,6 +150,6 @@ if __name__ == "__main__":
     cursor = connection.cursor()
 
     # request data from api, transform, and load in DB
-    schedule_wrapper(1/180, 600, fillDB, cursor)
+    schedule_wrapper(60, 600, fillDB, cursor) # once every minute, for 10 minutes
     scheduler.run()
 
