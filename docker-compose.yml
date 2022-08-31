@@ -1,8 +1,8 @@
-version: '3.1'
+version: '3.9'
 
 services:
 
-  db:
+  psql-app:
     image: postgres:latest
     restart: always
     environment:
@@ -14,4 +14,10 @@ services:
     container_name: velib_db
     ports:
       - "5432:5432"
+
+  python-app:
+    build : 
+      context : ./python-app
+      dockerfile : Dockerfile
+    container_name: db_writer
 

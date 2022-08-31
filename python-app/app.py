@@ -1,12 +1,26 @@
 import requests
 import sched
 import time
+import retry
 import datetime
 import logging
 import numpy as np
 import pandas as pd
 import psycopg2
 
+####################
+#
+# Establish database
+# connection
+#
+####################
+
+def connectDB():
+    try:
+        connection = psycopg2.connect(user="user",password="password",host="host.docker.internal",port="5432",database="user")
+        connection. autocommit = True
+        cursor = connection.cursor()
+        return cursor
 
 ####################
 #
@@ -141,13 +155,7 @@ def schedule_wrapper(frequency, duration, func, cursor):
 if __name__ == "__main__":
 
     # Connect to database
-    connection = psycopg2.connect(user="user",
-                                password="password",
-                                host="host.docker.internal",
-                                port="5432",
-                                database="user")
-    connection. autocommit = True
-    cursor = connection.cursor()
+    cursor = connectDB()
 
     # request data from api, transform, and load in DB
     schedule_wrapper(60, 600, fillDB, cursor) # once every minute, for 10 minutes

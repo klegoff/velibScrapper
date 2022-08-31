@@ -7,6 +7,6 @@ WORKDIR /app
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 
-COPY writeDB.py writeDB.py
+COPY app.py app.py
 
-CMD [ "python3", "writeDB.py"]
+CMD [ "python3", "app.py"]
