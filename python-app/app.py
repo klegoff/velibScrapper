@@ -1,7 +1,7 @@
 import requests
 import sched
 import time
-import retry
+from retry import retry
 import datetime
 import logging
 import numpy as np
@@ -15,12 +15,13 @@ import psycopg2
 #
 ####################
 
+@retry(tries=10, delay=30)
 def connectDB():
-    try:
-        connection = psycopg2.connect(user="user",password="password",host="host.docker.internal",port="5432",database="user")
-        connection. autocommit = True
-        cursor = connection.cursor()
-        return cursor
+    connection = psycopg2.connect(user="user",password="password",host="host.docker.internal",port="5432",database="user")
+    connection. autocommit = True
+    cursor = connection.cursor()
+    return cursor
+
 
 ####################
 #
