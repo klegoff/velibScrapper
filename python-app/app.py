@@ -1,3 +1,4 @@
+from distutils.log import error
 import requests
 import sched
 import time
@@ -8,6 +9,11 @@ import numpy as np
 import pandas as pd
 import psycopg2
 
+# set log level
+logging.basicConfig()
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 ####################
 #
 # Establish database
@@ -16,12 +22,18 @@ import psycopg2
 ####################
 
 @retry(tries=10, delay=30)
-def connectDB():
-    connection = psycopg2.connect(user="user",password="password",host="host.docker.internal",port="5432",database="user")
-    connection. autocommit = True
-    cursor = connection.cursor()
-    return cursor
-
+def connectDB(): 
+    try:
+        connection = psycopg2.connect(user="user",password="password",host="host.docker.internal",port="5432",database="user")
+        connection. autocommit = True
+        cursor = connection.cursor()
+        logger.info(str(datetime.datetime.now()) + " - Connection to DB established.")
+        return cursor
+        
+    except Exception as e:
+        logger.warning(str(datetime.datetime.now()) +" - Connection to DB failed, will retry.")
+        raise e
+        return None
 
 ####################
 #
@@ -118,7 +130,8 @@ def insertHistoricalData(historical_data, cursor):
         except Exception as e:
             #print(e)
             pass
-    print("Number of inserted rows : " + str(new_line_count))
+
+    logger.info("Number of new rows in HISTORIC  : " + str(new_line_count))
 
 def fillDB(cursor, save_station = False):
     """
@@ -126,7 +139,7 @@ def fillDB(cursor, save_station = False):
     read from api, process, save in db
     save_station = True, if we want to save station data
     """
-    print("Data extract, at time =",datetime.datetime.now())
+    logger.info(str(datetime.datetime.now())  + " - Data extract.")
     station_data, historical_data = format(getData())
 
     if save_station:
@@ -139,14 +152,14 @@ def fillDB(cursor, save_station = False):
 
 scheduler = sched.scheduler(time.time, time.sleep)
 
-def schedule_wrapper(frequency, duration, func, cursor):
+def schedule_wrapper(period, duration, func, cursor):
     """
     schedule our function
     source : https://stackoverflow.com/a/12136105/14843174
     """
-    no_of_events = int( duration / frequency )
+    no_of_events = int( duration / period )
     for i in range( no_of_events ):
-        delay = i * frequency
+        delay = i * period
         if i == 0:
             scheduler.enter(delay, 1, func, (cursor, True)) #we save station data, and historical data
         else:
@@ -159,6 +172,5 @@ if __name__ == "__main__":
     cursor = connectDB()
 
     # request data from api, transform, and load in DB
-    schedule_wrapper(60, 600, fillDB, cursor) # once every minute, for 10 minutes
+    schedule_wrapper(60, 30 * 24 * 3600, fillDB, cursor) # every minutes for
     scheduler.run()
-
