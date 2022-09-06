@@ -14,6 +14,13 @@ logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# DB connection
+USER="user"
+PASSWORD="password"
+HOST="host.docker.internal"
+PORT="5432"
+DATABASE="user"
+
 ####################
 #
 # Establish database
@@ -24,7 +31,7 @@ logger.setLevel(logging.INFO)
 @retry(tries=10, delay=30)
 def connectDB(): 
     try:
-        connection = psycopg2.connect(user="user",password="password",host="host.docker.internal",port="5432",database="user")
+        connection = psycopg2.connect(user=USER,password=PASSWORD,host=HOST,port=PORT,database=DATABASE)
         connection. autocommit = True
         cursor = connection.cursor()
         logger.info(str(datetime.datetime.now()) + " - Connection to DB established.")
