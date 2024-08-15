@@ -1,23 +1,19 @@
-version: '3.9'
-
 services:
-
-  psql-app:
-    image: postgres:latest
-    restart: always
+  db:
+    image: postgres
+    container_name: postgres_db
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-    volumes:
-      - ./psql-app/psql-files:/var/lib/postgresql/data
-      - ./psql-app/db_init.sql:/docker-entrypoint-initdb.d/create_tables.sql
-    container_name: velib_db
+      POSTGRES_PASSWORD: "password"
     ports:
       - "5432:5432"
+    volumes:
+      - ./psql_app/psql_files:/var/lib/postgresl/data
+      - ./db_init.sql:/docker-entrypoint-initdb.d/create_tables.sql
 
-  python-app:
-    build : 
-      context : ./python-app
-      dockerfile : Dockerfile
-    container_name: db_writer
-
+  python:
+    container_name: python_scraper
+    tty: true
+    environment:
+      POSTGRES_PASSWORD: "password"
+    build:
+      context: ./python_app

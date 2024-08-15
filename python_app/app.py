@@ -1,3 +1,4 @@
+import os
 from distutils.log import error
 import requests
 import sched
@@ -12,14 +13,14 @@ import psycopg2
 # set log level
 logging.basicConfig()
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # DB connection
-USER="user"
-PASSWORD="password"
-HOST="host.docker.internal"
-PORT="5432"
-DATABASE="user"
+USER="postgres" #os.getenv("POSTGRES_USER")
+PASSWORD="password"#os.getenv("POSTGRES_PASSWORD") #"password"
+HOST="db"#localhost
+PORT=5432
+DATABASE="postgres"#"velib_db"
 
 ####################
 #
@@ -34,7 +35,7 @@ def connectDB():
         connection = psycopg2.connect(user=USER,password=PASSWORD,host=HOST,port=PORT,database=DATABASE)
         connection. autocommit = True
         cursor = connection.cursor()
-        logger.info(str(datetime.datetime.now()) + " - Connection to DB established.")
+        logger.warning(str(datetime.datetime.now()) + " - Connection to DB established.")
         return cursor
         
     except Exception as e:
@@ -118,7 +119,7 @@ def insertStationData(station_data, cursor):
         try:
             cursor.execute("""INSERT INTO station (stationcode, name, nom_arrondissement_communes, capacity, coordonnee_x, coordonnee_y) VALUES (%s, %s, %s, %s, %s, %s);""",row)
         except Exception as e:
-            #print(e)
+            logging.warning(e)
             pass
 
 def insertHistoricalData(historical_data, cursor):
@@ -131,11 +132,11 @@ def insertHistoricalData(historical_data, cursor):
     for _idx, row in historical_data.iterrows():
         row = tuple(row)
         try:
-            cursor.execute("""INSERT INTO historic   (record_id,  stationcode, ebike, mechanical, numbikesavailable, numdocksavailable, is_renting, is_installed, is_returning, duedate) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",row)
+            cursor.execute("""INSERT INTO historic (record_id,  stationcode, ebike, mechanical, numbikesavailable, numdocksavailable, is_renting, is_installed, is_returning, duedate) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",row)
             new_line_count += 1
 
         except Exception as e:
-            #print(e)
+            logging.warning(e)
             pass
 
     logger.info("Number of new rows in HISTORIC  : " + str(new_line_count))
@@ -147,7 +148,13 @@ def fillDB(cursor, save_station = False):
     save_station = True, if we want to save station data
     """
     logger.info(str(datetime.datetime.now())  + " - Data extract.")
-    station_data, historical_data = format(getData())
+    try:
+        station_data, historical_data = format(getData())
+        
+    except Exception as e:
+        logging.warning("Data acquisition failed")
+        logging.warning(e)
+        return
 
     if save_station:
         insertStationData(station_data, cursor)
@@ -171,6 +178,21 @@ def schedule_wrapper(period, duration, func, cursor):
             scheduler.enter(delay, 1, func, (cursor, True)) #we save station data, and historical data
         else:
             scheduler.enter(delay, 1, func, (cursor, False)) # we save only historical data
+
+def retrieveDataset(cursor):
+    q = "select * from station"
+    cursor.execute(q)
+    data = cursor.fetchall()
+    cols = [el.name for el in cursor.description]
+    stations = pd.DataFrame(data, columns=cols)
+    
+    q = "select * from historic"
+    cursor.execute(q)
+    data = cursor.fetchall()
+    cols = [el.name for el in cursor.description]
+    history = pd.DataFrame(data, columns=cols)
+    
+    return stations, history
 
 
 if __name__ == "__main__":
