@@ -9,6 +9,7 @@ import logging
 import numpy as np
 import pandas as pd
 import psycopg2
+import sqlalchemy as sa
 
 # set log level
 logging.basicConfig()
@@ -32,12 +33,15 @@ DATABASE="postgres"#"velib_db"
 @retry(tries=10, delay=30)
 def connectDB(): 
     try:
-        connection = psycopg2.connect(user=USER,password=PASSWORD,host=HOST,port=PORT,database=DATABASE)
-        connection. autocommit = True
-        cursor = connection.cursor()
+        connection_url = sa.URL.create("postgresql",
+                                       username=USER,
+                                       password=PASSWORD,
+                                       host=HOST,
+                                       database=DATABASE)
+        engine = sa.create_engine(connection_url, pool_recycle=3600)
         logger.warning(str(datetime.datetime.now()) + " - Connection to DB established.")
-        return cursor
-        
+        return engine
+
     except Exception as e:
         logger.warning(str(datetime.datetime.now()) +" - Connection to DB failed, will retry.")
         raise e
@@ -105,43 +109,30 @@ def format(data):
 
 ####################
 #
-# Database writing
+# Database related
 #
 ####################
 
-def insertStationData(station_data):
+def insertData(data, table_name, engine):
     """
     insert data in the database
-    data = station_data (type = dataframe)
+    data = station_data or historical_data (type = dataframe)
     """
-    for _idx, row in station_data.iterrows():
-        row = tuple(row)
-        try:
-            cursor.execute("""INSERT INTO station (stationcode, name, nom_arrondissement_communes, capacity, coordonnee_x, coordonnee_y) VALUES (%s, %s, %s, %s, %s, %s);""",row)
-        except Exception as e:
-            logger.warning(e)
-            pass
+    with engine.begin() as conn:
+        data.to_sql(name=table_name, con=conn, if_exists="append", index=False)
 
-def insertHistoricalData(historical_data):
+def retrieveData(engine, table="station", select_field="*"):
     """
-    insert data in the database
-    data = station_data (type = dataframe)
+    extract whole table from database
+    table = "station" or "historic"
     """
-    new_line_count = 0
+    with engine.begin() as conn:
 
-    for _idx, row in historical_data.iterrows():
-        row = tuple(row)
-        try:
-            cursor.execute("""INSERT INTO historic (record_id,  stationcode, ebike, mechanical, numbikesavailable, numdocksavailable, is_renting, is_installed, is_returning, duedate) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",row)
-            new_line_count += 1
+        data = pd.read_sql_query(sa.text(f"select {select_field} from {table}"), conn)
 
-        except Exception as e:
-            logger.warning(e)
-            pass
+    return data 
 
-    logger.info("Number of new rows in HISTORIC  : " + str(new_line_count))
-
-def fillDB(save_station = False):
+def fillDB(engine, save_station = False):
     """
     execute the whole data pipeline:
     read from api, process, save in db
@@ -155,23 +146,19 @@ def fillDB(save_station = False):
         logger.warning("Data acquisition failed")
         logger.warning(e)
         return
-    
-   try :
-       if save_station:
-        insertStationData(station_data, cursor)
-        insertHistoricalData(historical_data, cursor)
-       
-       else:
-        insertHistoricalData(historical_data, cursor)
-    
-    except Exception as e:
-        logger.warning("Data writing failed")
-        logger.warning(e)
-        return
+        
+    if save_station:
+        insertData(station_data, "stations", engine=engine)
+
+    # delete pre-existing entries
+    previous_ids = retrieveData(engine, "historic","record_id").record_id
+    historical_data = historical_data.loc[~historical_data.record_id.isin(previous_ids)]
+    insertData(historical_data, "historic", engine=engine)
+
 
 scheduler = sched.scheduler(time.time, time.sleep)
 
-def schedule_wrapper(period, duration, func):
+def schedule_wrapper(period, duration, func, engine):
     """
     schedule our function
     source : https://stackoverflow.com/a/12136105/14843174
@@ -180,31 +167,31 @@ def schedule_wrapper(period, duration, func):
     for i in range( no_of_events ):
         delay = i * period
         if i == 0:
-            scheduler.enter(delay, 1, func, (cursor, True)) #we save station data, and historical data
+            scheduler.enter(delay, 1, func, (engine, True)) #we save station data, and historical data
         else:
-            scheduler.enter(delay, 1, func, (cursor, False)) # we save only historical data
-
-def retrieveDataset():
-    q = "select * from station"
-    cursor.execute(q)
-    data = cursor.fetchall()
-    cols = [el.name for el in cursor.description]
-    stations = pd.DataFrame(data, columns=cols)
-    
-    q = "select * from historic"
-    cursor.execute(q)
-    data = cursor.fetchall()
-    cols = [el.name for el in cursor.description]
-    history = pd.DataFrame(data, columns=cols)
-    
-    return stations, history
-
+            scheduler.enter(delay, 1, func, (engine, False)) # we save only historical data
 
 if __name__ == "__main__":
 
     # Connect to database
-    cursor = connectDB()
+    engine = connectDB()
 
-    # request data from api, transform, and load in DB
-    schedule_wrapper(60, 30 * 24 * 3600, fillDB) # every minutes for 30 days
+    ### FOR DEBUG : run the process by hand 
+    #station_data, historical_data = format(getData())
+
+    # delete pre-existing entries
+    #previous_ids = retrieveData(engine, "historic","record_id").record_id
+    
+    #print("n_entries:", previous_ids.shape[0])
+    
+    #historical_data = historical_data.loc[~historical_data.record_id.isin(previous_ids)]
+    #insertData(historical_data, "historic", engine=engine)
+    
+    #new_ids = retrieveData(engine, "historic","record_id").record_id
+    #print("n_entries:", new_ids.shape[0])
+
+    ### request data from api, transform, and load in DB
+    delay = 20 # number of seconds
+    total_duration = 30 * 24 * 3600 # number of seconds (30 days)
+    schedule_wrapper(delay, total_duration, fillDB, engine)
     scheduler.run()
