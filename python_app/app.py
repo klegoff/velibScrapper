@@ -109,7 +109,7 @@ def format(data):
 #
 ####################
 
-def insertStationData(station_data, cursor):
+def insertStationData(station_data):
     """
     insert data in the database
     data = station_data (type = dataframe)
@@ -119,10 +119,10 @@ def insertStationData(station_data, cursor):
         try:
             cursor.execute("""INSERT INTO station (stationcode, name, nom_arrondissement_communes, capacity, coordonnee_x, coordonnee_y) VALUES (%s, %s, %s, %s, %s, %s);""",row)
         except Exception as e:
-            logging.warning(e)
+            logger.warning(e)
             pass
 
-def insertHistoricalData(historical_data, cursor):
+def insertHistoricalData(historical_data):
     """
     insert data in the database
     data = station_data (type = dataframe)
@@ -136,12 +136,12 @@ def insertHistoricalData(historical_data, cursor):
             new_line_count += 1
 
         except Exception as e:
-            logging.warning(e)
+            logger.warning(e)
             pass
 
     logger.info("Number of new rows in HISTORIC  : " + str(new_line_count))
 
-def fillDB(cursor, save_station = False):
+def fillDB(save_station = False):
     """
     execute the whole data pipeline:
     read from api, process, save in db
@@ -152,21 +152,26 @@ def fillDB(cursor, save_station = False):
         station_data, historical_data = format(getData())
         
     except Exception as e:
-        logging.warning("Data acquisition failed")
-        logging.warning(e)
+        logger.warning("Data acquisition failed")
+        logger.warning(e)
         return
-
-    if save_station:
+    
+   try :
+       if save_station:
         insertStationData(station_data, cursor)
         insertHistoricalData(historical_data, cursor)
-    
-    else:
+       
+       else:
         insertHistoricalData(historical_data, cursor)
-
+    
+    except Exception as e:
+        logger.warning("Data writing failed")
+        logger.warning(e)
+        return
 
 scheduler = sched.scheduler(time.time, time.sleep)
 
-def schedule_wrapper(period, duration, func, cursor):
+def schedule_wrapper(period, duration, func):
     """
     schedule our function
     source : https://stackoverflow.com/a/12136105/14843174
@@ -179,7 +184,7 @@ def schedule_wrapper(period, duration, func, cursor):
         else:
             scheduler.enter(delay, 1, func, (cursor, False)) # we save only historical data
 
-def retrieveDataset(cursor):
+def retrieveDataset():
     q = "select * from station"
     cursor.execute(q)
     data = cursor.fetchall()
@@ -201,5 +206,5 @@ if __name__ == "__main__":
     cursor = connectDB()
 
     # request data from api, transform, and load in DB
-    schedule_wrapper(60, 30 * 24 * 3600, fillDB, cursor) # every minutes for
+    schedule_wrapper(60, 30 * 24 * 3600, fillDB) # every minutes for 30 days
     scheduler.run()
