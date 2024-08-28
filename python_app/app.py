@@ -8,8 +8,9 @@ import datetime
 import logging
 import numpy as np
 import pandas as pd
-import psycopg2
 import sqlalchemy as sa
+
+DEBUG_MODE = False
 
 # set log level
 logging.basicConfig()
@@ -17,11 +18,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 # DB connection
-USER="postgres" #os.getenv("POSTGRES_USER")
-PASSWORD="password"#os.getenv("POSTGRES_PASSWORD") #"password"
-HOST="db"#localhost
+USER=os.getenv("POSTGRES_USER")
+PASSWORD=os.getenv("POSTGRES_PASSWORD")
+HOST="db" #"localhost"
 PORT=5432
-DATABASE="postgres"#"velib_db"
+DATABASE=os.getenv("POSTGRES_DB")
 
 ####################
 #
@@ -38,7 +39,8 @@ def connectDB():
                                        password=PASSWORD,
                                        host=HOST,
                                        database=DATABASE)
-        engine = sa.create_engine(connection_url, pool_recycle=3600)
+        logger.warning(str(connection_url))
+        engine = sa.create_engine(connection_url, pool_recycle=3600, pool_pre_ping=True)
         logger.warning(str(datetime.datetime.now()) + " - Connection to DB established.")
         return engine
 
@@ -73,7 +75,7 @@ def format(data):
     df = pd.concat([df,x], axis=1)
 
     # split the 2 coordinates
-    coordonnees = pd.DataFrame(np.concatenate(df["coordonnees_geo"].values).reshape(-1,2), columns=["coordonnee_x","coordonnee_y"])
+    coordonnees = pd.DataFrame(np.hstack(df["coordonnees_geo"].values).reshape(-1,2), columns=["coordonnee_x","coordonnee_y"])
     df = pd.concat([df.drop(columns="coordonnees_geo"), coordonnees],axis=1)
 
     # split into stations data & historical data
@@ -119,7 +121,7 @@ def insertData(data, table_name, engine):
     data = station_data or historical_data (type = dataframe)
     """
     with engine.begin() as conn:
-        data.to_sql(name=table_name, con=conn, if_exists="append", index=False)
+        data.to_sql(name=table_name, con=conn, if_exists="append", index=False, schema="public")
 
 def retrieveData(engine, table="station", select_field="*"):
     """
@@ -127,7 +129,7 @@ def retrieveData(engine, table="station", select_field="*"):
     table = "station" or "historic"
     """
     with engine.begin() as conn:
-
+    
         data = pd.read_sql_query(sa.text(f"select {select_field} from {table}"), conn)
 
     return data 
@@ -154,7 +156,8 @@ def fillDB(engine, save_station = False):
     previous_ids = retrieveData(engine, "historic","record_id").record_id
     historical_data = historical_data.loc[~historical_data.record_id.isin(previous_ids)]
     insertData(historical_data, "historic", engine=engine)
-
+    current_ids = retrieveData(engine, "historic","record_id").record_id
+    logger.warning(f"Total historic entries :{len(current_ids)}")
 
 scheduler = sched.scheduler(time.time, time.sleep)
 
@@ -172,26 +175,32 @@ def schedule_wrapper(period, duration, func, engine):
             scheduler.enter(delay, 1, func, (engine, False)) # we save only historical data
 
 if __name__ == "__main__":
-
-    # Connect to database
+     
+    
     engine = connectDB()
 
-    ### FOR DEBUG : run the process by hand 
-    #station_data, historical_data = format(getData())
+    if DEBUG_MODE:
+        ### FOR DEBUG : run the process by hand 
+        
+        import time
+        time.sleep(10)
+        
+        station_data, historical_data = format(getData())
 
-    # delete pre-existing entries
-    #previous_ids = retrieveData(engine, "historic","record_id").record_id
-    
-    #print("n_entries:", previous_ids.shape[0])
-    
-    #historical_data = historical_data.loc[~historical_data.record_id.isin(previous_ids)]
-    #insertData(historical_data, "historic", engine=engine)
-    
-    #new_ids = retrieveData(engine, "historic","record_id").record_id
-    #print("n_entries:", new_ids.shape[0])
+        # delete pre-existing entries
+        previous_ids = retrieveData(engine, "historic","record_id").record_id
+        
+        print("n_entries:", previous_ids.shape[0])
+        
+        historical_data = historical_data.loc[~historical_data.record_id.isin(previous_ids)]
+        insertData(historical_data, "historic", engine=engine)
+        
+        new_ids = retrieveData(engine, "historic","record_id").record_id
+        print("n_entries:", new_ids.shape[0])
 
-    ### request data from api, transform, and load in DB
-    delay = 20 # number of seconds
-    total_duration = 30 * 24 * 3600 # number of seconds (30 days)
-    schedule_wrapper(delay, total_duration, fillDB, engine)
-    scheduler.run()
+    else:
+        ### request data from api, transform, and load in DB, at a given frequency
+        delay = 20 # number of seconds
+        total_duration = 30 * 24 * 3600 # number of seconds (30 days)
+        schedule_wrapper(delay, total_duration, fillDB, engine)
+        scheduler.run()
