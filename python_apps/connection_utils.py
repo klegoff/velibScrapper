@@ -1,12 +1,6 @@
-import os
-from distutils.log import error
-import requests
-import sched
-import time
 from retry import retry
 import datetime
 import logging
-import numpy as np
 import pandas as pd
 import sqlalchemy as sa
 
@@ -14,13 +8,6 @@ import sqlalchemy as sa
 logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
-
-# DB connection
-#USER=os.getenv("POSTGRES_USER")
-#PASSWORD=os.getenv("POSTGRES_PASSWORD")
-#HOST="db" #"localhost"
-#PORT=5432
-#DATABASE=os.getenv("POSTGRES_DB")
 
 ####################
 #

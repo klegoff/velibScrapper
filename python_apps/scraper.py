@@ -1,5 +1,4 @@
 import os
-from distutils.log import error
 import requests
 import sched
 import time
@@ -81,7 +80,7 @@ def format(data):
 
 ####################
 #
-# Database related
+# Main functions
 #
 ####################
 
@@ -107,13 +106,13 @@ scheduler = sched.scheduler(time.time, time.sleep)
 
 def schedule_wrapper(period, duration, func, engine):
     """
-    schedule our function
+    schedule the previous function
     source : https://stackoverflow.com/a/12136105/14843174
     """
     no_of_events = int( duration / period )
     for i in range( no_of_events ):
         delay = i * period
-        scheduler.enter(delay, 1, func, (engine,)) #we save station data, and historical data
+        scheduler.enter(delay, 1, func, (engine,))
 
 if __name__ == "__main__":
      
