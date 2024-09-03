@@ -1,7 +1,8 @@
 services:
-  db:
+  db_app:
     image: postgres
     container_name: postgres_db
+    user: postgres
     environment:
       POSTGRES_USER: "test_user"
       POSTGRES_PASSWORD: "test_password"
@@ -12,12 +13,24 @@ services:
       - ./psql_app/psql_files:/var/lib/postgresl/data
       - ./psql_app/db_init.sql:/docker-entrypoint-initdb.d/create_tables.sql
 
-  python:
-    container_name: python_scraper
+  scraper_app:
+    container_name: scraper
     tty: true
     environment:
       POSTGRES_USER: "test_user"
       POSTGRES_PASSWORD: "test_password"
       POSTGRES_DB: "velib_db"
     build:
-      context: ./python_app
+      context: ./python_apps
+      dockerfile: scraper.Dockerfile
+
+  front_app:
+    container_name: front
+    tty: true
+    environment:
+      POSTGRES_USER: "test_user"
+      POSTGRES_PASSWORD: "test_password"
+      POSTGRES_DB: "velib_db"
+    build:
+      context: ./python_apps
+      dockerfile: front.Dockerfile

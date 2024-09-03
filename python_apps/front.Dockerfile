@@ -5,9 +5,10 @@ FROM python:3.9.13
 WORKDIR /app
 
 COPY requirements.txt ./
-COPY app.py ./
+COPY front.py ./
+COPY connection_utils.py ./
 
 RUN pip3 install -r requirements.txt
 
-ENTRYPOINT ["python", "app.py"]
+ENTRYPOINT ["python", "front.py"]
 #ENTRYPOINT ["tail", "-f", "/dev/null"]

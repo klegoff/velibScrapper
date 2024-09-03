@@ -10,44 +10,14 @@ import numpy as np
 import pandas as pd
 import sqlalchemy as sa
 
+from connection_utils import connectDB, insertData, retrieveData 
+
 DEBUG_MODE = False
 
 # set log level
 logging.basicConfig()
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
-
-# DB connection
-USER=os.getenv("POSTGRES_USER")
-PASSWORD=os.getenv("POSTGRES_PASSWORD")
-HOST="db" #"localhost"
-PORT=5432
-DATABASE=os.getenv("POSTGRES_DB")
-
-####################
-#
-# Establish database
-# connection
-#
-####################
-
-@retry(tries=10, delay=30)
-def connectDB(): 
-    try:
-        connection_url = sa.URL.create("postgresql",
-                                       username=USER,
-                                       password=PASSWORD,
-                                       host=HOST,
-                                       database=DATABASE)
-        logger.warning(str(connection_url))
-        engine = sa.create_engine(connection_url, pool_recycle=3600, pool_pre_ping=True)
-        logger.warning(str(datetime.datetime.now()) + " - Connection to DB established.")
-        return engine
-
-    except Exception as e:
-        logger.warning(str(datetime.datetime.now()) +" - Connection to DB failed, will retry.")
-        raise e
-        return None
 
 ####################
 #
@@ -115,49 +85,23 @@ def format(data):
 #
 ####################
 
-def insertData(data, table_name, engine):
-    """
-    insert data in the database
-    data = station_data or historical_data (type = dataframe)
-    """
-    with engine.begin() as conn:
-        data.to_sql(name=table_name, con=conn, if_exists="append", index=False, schema="public")
-
-def retrieveData(engine, table="station", select_field="*"):
-    """
-    extract whole table from database
-    table = "station" or "historic"
-    """
-    with engine.begin() as conn:
-    
-        data = pd.read_sql_query(sa.text(f"select {select_field} from {table}"), conn)
-
-    return data 
-
-def fillDB(engine, save_station = False):
+def fillDB(engine):
     """
     execute the whole data pipeline:
     read from api, process, save in db
     save_station = True, if we want to save station data
     """
     logger.info(str(datetime.datetime.now())  + " - Data extract.")
+    
     try:
         station_data, historical_data = format(getData())
+        insertData(historical_data, engine, "historic","record_id", log_count=True)
+        insertData(station_data, engine, "station","stationcode", log_count=True)
         
     except Exception as e:
         logger.warning("Data acquisition failed")
         logger.warning(e)
         return
-        
-    if save_station:
-        insertData(station_data, "stations", engine=engine)
-
-    # delete pre-existing entries
-    previous_ids = retrieveData(engine, "historic","record_id").record_id
-    historical_data = historical_data.loc[~historical_data.record_id.isin(previous_ids)]
-    insertData(historical_data, "historic", engine=engine)
-    current_ids = retrieveData(engine, "historic","record_id").record_id
-    logger.warning(f"Total historic entries :{len(current_ids)}")
 
 scheduler = sched.scheduler(time.time, time.sleep)
 
@@ -169,34 +113,31 @@ def schedule_wrapper(period, duration, func, engine):
     no_of_events = int( duration / period )
     for i in range( no_of_events ):
         delay = i * period
-        if i == 0:
-            scheduler.enter(delay, 1, func, (engine, True)) #we save station data, and historical data
-        else:
-            scheduler.enter(delay, 1, func, (engine, False)) # we save only historical data
+        scheduler.enter(delay, 1, func, (engine,)) #we save station data, and historical data
 
 if __name__ == "__main__":
      
+    # DB connection
+    USER=os.getenv("POSTGRES_USER")
+    PASSWORD=os.getenv("POSTGRES_PASSWORD")
+    HOST="db_app" #"localhost"
+    PORT=5432
+    DATABASE=os.getenv("POSTGRES_DB")
     
-    engine = connectDB()
+    engine = connectDB(username=USER, password=PASSWORD, host=HOST, database=DATABASE)
 
     if DEBUG_MODE:
         ### FOR DEBUG : run the process by hand 
         
         import time
-        time.sleep(10)
-        
-        station_data, historical_data = format(getData())
+        time.sleep(3)
 
-        # delete pre-existing entries
-        previous_ids = retrieveData(engine, "historic","record_id").record_id
+        # get fresh data
+        station_data, historical_data = format(getData())
         
-        print("n_entries:", previous_ids.shape[0])
-        
-        historical_data = historical_data.loc[~historical_data.record_id.isin(previous_ids)]
-        insertData(historical_data, "historic", engine=engine)
-        
-        new_ids = retrieveData(engine, "historic","record_id").record_id
-        print("n_entries:", new_ids.shape[0])
+        # insert in db
+        insertData(historical_data, engine, "historic","record_id", log_count=True)
+        insertData(station_data, engine, "station","stationcode", log_count=True)
 
     else:
         ### request data from api, transform, and load in DB, at a given frequency
