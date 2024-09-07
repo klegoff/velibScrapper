@@ -1,0 +1,4 @@
+dash==2.17.1
+#matplotlib==3.9.2
+plotly==5.24.0
+gunicorn==20.1.0

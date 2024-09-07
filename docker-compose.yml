@@ -31,6 +31,8 @@ services:
       POSTGRES_USER: "test_user"
       POSTGRES_PASSWORD: "test_password"
       POSTGRES_DB: "velib_db"
+    ports:
+      - "8050:8050"
     build:
       context: ./python_apps
       dockerfile: front.Dockerfile
