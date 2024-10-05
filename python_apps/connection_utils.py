@@ -72,3 +72,11 @@ def retrieveData(engine, table="station", select_field="*"):
         results = conn.execute(sa.text(f"select {select_field} from public.{table}"))
     return pd.DataFrame(results)
 
+def retrieveData_stationcode(engine, stationcode = 16107):
+    
+    with engine.begin() as conn:
+        query = f"SELECT * from historic WHERE stationcode = '{stationcode}'"
+        results = conn.execute(sa.text(query))
+    
+    return pd.DataFrame(results)
+

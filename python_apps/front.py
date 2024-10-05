@@ -1,5 +1,5 @@
 import os
-from connection_utils import connectDB, retrieveData
+from connection_utils import connectDB, retrieveData, retrieveData_stationcode
 import plotly.express as px
 from dash import Dash, dcc, html, Input, Output,callback
 
@@ -14,7 +14,7 @@ engine = connectDB(username=USER, host=HOST, password=PASSWORD, database=DATABAS
 
 # get data (need refresh ?)
 station = retrieveData(engine, table="station").sort_values("name").set_index("stationcode")
-hist = retrieveData(engine, table="historic")
+#hist = retrieveData(engine, table="historic")
 name_to_code = {v:k for k,v in station["name"].to_dict().items()}
 
 app = Dash(__name__)
@@ -33,7 +33,8 @@ app.layout = html.Div([
 )
 def update_figure(selected_station_name):
     stationcode = name_to_code[selected_station_name]
-    data = hist.loc[hist.stationcode == stationcode]
+    #data = hist.loc[hist.stationcode == stationcode]
+    data = retrieveData_stationcode(engine, stationcode)
     data = data.groupby("duedate").min().reset_index() # duplicate management
     if data.shape[0] > 0:
         fig = px.line(data,x="duedate", y=["ebike","mechanical", "numbikesavailable"],markers="o")
