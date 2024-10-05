@@ -25,7 +25,7 @@ def connectDB(username, password, host, database):
                                        host=host,
                                        database=database)
         logger.warning(str(connection_url))
-        engine = sa.create_engine(connection_url, pool_recycle=3600)#, echo=True, echo_pool="debug")
+        engine = sa.create_engine(connection_url, pool_recycle=3600, connect_args={'sslmode': "disable"})#, echo=True, echo_pool="debug")
         logger.warning(str(datetime.datetime.now()) + " - Connection to DB established.")
         return engine
 
