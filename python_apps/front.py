@@ -1,4 +1,5 @@
 import os
+import sqlalchemy as sa
 from connection_utils import connectDB, retrieveData, retrieveData_stationcode
 import plotly.express as px
 from dash import Dash, dcc, html, Input, Output,callback
@@ -12,8 +13,14 @@ DATABASE=os.getenv("POSTGRES_DB")
 
 engine = connectDB(username=USER, host=HOST, password=PASSWORD, database=DATABASE)
 
+# retrieve tables objects
+metadata = sa.schema.MetaData()
+metadata.reflect(engine)
+historic_table = metadata.tables["historic"]
+station_table = metadata.tables["station"]
+
 # get data (need refresh ?)
-station = retrieveData(engine, table="station").sort_values("name").set_index("stationcode")
+station = retrieveData(engine, station_table).sort_values("name").set_index("stationcode")
 #hist = retrieveData(engine, table="historic")
 name_to_code = {v:k for k,v in station["name"].to_dict().items()}
 
@@ -34,7 +41,7 @@ app.layout = html.Div([
 def update_figure(selected_station_name):
     stationcode = name_to_code[selected_station_name]
     #data = hist.loc[hist.stationcode == stationcode]
-    data = retrieveData_stationcode(engine, stationcode)
+    data = retrieveData_stationcode(engine, historic_table, stationcode)
     data = data.groupby("duedate").min().reset_index() # duplicate management
     if data.shape[0] > 0:
         fig = px.line(data,x="duedate", y=["ebike","mechanical", "numbikesavailable"],markers="o")

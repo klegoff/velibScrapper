@@ -94,8 +94,8 @@ def fillDB(engine):
     
     try:
         station_data, historical_data = format(getData())
-        insertData(historical_data, engine, "historic","record_id", log_count=True)
-        insertData(station_data, engine, "station","stationcode", log_count=True)
+        insertData(historical_data, engine, historic_table, log_count=True)
+        insertData(station_data, engine, station_table, log_count=False)   
         
     except Exception as e:
         logger.warning("Data acquisition failed")
@@ -125,6 +125,12 @@ if __name__ == "__main__":
     
     engine = connectDB(username=USER, password=PASSWORD, host=HOST, database=DATABASE)
 
+    # retrieve tables objects
+    metadata = sa.schema.MetaData()
+    metadata.reflect(engine)
+    historic_table = metadata.tables["historic"]
+    station_table = metadata.tables["station"]
+    
     if DEBUG_MODE:
         ### FOR DEBUG : run the process by hand 
         
@@ -135,8 +141,8 @@ if __name__ == "__main__":
         station_data, historical_data = format(getData())
         
         # insert in db
-        insertData(historical_data, engine, "historic","record_id", log_count=True)
-        insertData(station_data, engine, "station","stationcode", log_count=True)
+        insertData(historical_data, engine, log_count=True)
+        insertData(station_data, engine, log_count=False)    
 
     else:
         ### request data from api, transform, and load in DB, at a given frequency
@@ -144,3 +150,4 @@ if __name__ == "__main__":
         total_duration = 30 * 24 * 3600 # number of seconds (30 days)
         schedule_wrapper(delay, total_duration, fillDB, engine)
         scheduler.run()
+    
